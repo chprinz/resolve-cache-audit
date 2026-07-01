@@ -1,50 +1,46 @@
 # DaVinci Resolve — Cache Audit
 
-Ein Tool für macOS, das zeigt, welches Projekt wie viel Cache auf welchem
-Laufwerk belegt — Render-Cache, Optimized Media und Audio-Cache zusammen,
-inklusive Cache von Projekten, die es in deiner Bibliothek gar nicht mehr
-gibt.
+A macOS tool that shows which project's cache is eating up which drive, and
+how much — render cache, Optimized Media, and audio cache together,
+including cache left behind by projects that no longer exist in your
+library.
 
-Resolves Cache (`CacheClip`) speichert jeden gecachten Clip in einem Ordner,
-der nach einer kryptischen UUID benannt ist, z. B.
-`eee02c2c-325d-460f-9aeb-0e28aac8b45f`. Wer mehrere Disk-Datenbanken über
-interne und externe Laufwerke verteilt hat, sammelt schnell Dutzende
-anonyme UUID-Ordner an.
+Resolve's cache (`CacheClip`) stores every cached clip in a folder named
+after an opaque UUID, e.g. `eee02c2c-325d-460f-9aeb-0e28aac8b45f`. If
+you've got multiple disk databases spread across your internal drive and
+several external drives, you end up with dozens of anonymous UUID folders.
 
-## Im Vergleich zu Resolves eigenem Cache-Manager
+## How this compares to Resolve's own Cache Manager
 
-Resolve ist hier nicht komplett blind — seit Version **18.5** zeigt
-`Playback → Delete Render Cache → Manage Cache Data` eine projekt- und
-bibliotheksübergreifende Übersicht über den **Render-Cache**: Projektname,
-Speicherort und Größe, sortierbar, über alle Bibliotheken hinweg, die
-Resolve findet. Für Render-Cache allein löst das native Tool schon einen
-Großteil des "wem gehört dieser UUID-Ordner"-Problems.
+Resolve isn't blind to this — since **18.5**, `Playback → Delete Render
+Cache → Manage Cache Data` gives you a genuinely useful cross-project,
+cross-library view of **render cache**: project name, location, and size,
+sortable, across every library Resolve can see. For render cache alone,
+that native tool already solves a lot of the "whose is this UUID folder"
+problem.
 
-Was es nicht kann:
+What it doesn't do:
 
-- **Optimized Media und Audio-Cache** lassen sich zwar in Resolve löschen
-  (`Playback → Delete Optimized Media` oder von Hand), aber — anders als
-  beim Render-Cache — zeigt Resolve dabei nicht, welchem Projekt oder
-  welchen Dateien das gehört. Dieses Tool ordnet alle drei Cache-Arten
-  (Render, Optimized Media, Audio) auf die gleiche Weise Projekten zu.
-- **Verwaister Cache** — ein UUID-Ordner eines Projekts, das längst aus der
-  Bibliothek gelöscht wurde — taucht in Resolves Cache-Manager gar nicht
-  mehr auf, weil es keinen Projekteintrag mehr gibt, dem er zugeordnet
-  werden könnte. Dieses Tool findet ihn trotzdem über die `Info.txt`, die
-  Resolve selbst neben die Cache-Dateien schreibt (siehe unten), und
-  markiert ihn als "vermutlich gelöscht".
-- Resolves eigener Cache-Manager löscht sofort, **ohne Warnung oder Undo**.
-  Die native App-Version dieses Tools (weiter unten) verschiebt Cache
-  stattdessen in den Papierkorb — wiederherstellbar, falls man sich
-  vertan hat.
-- Dieses Tool funktioniert auch, ohne Resolve überhaupt zu öffnen —
-  praktisch für einen schnellen "wie viel Platz belegt das eigentlich
-  wirklich"-Check.
+- **Optimized Media and audio cache** can be deleted from Resolve
+  (`Playback → Delete Optimized Media`, or by hand), but — unlike render
+  cache — Resolve doesn't show you which project or files that data
+  belongs to before you delete it. This tool maps all three cache types
+  (render, Optimized Media, audio) back to project names the same way.
+- **Orphaned cache** — a UUID folder left behind by a project you deleted
+  from your library — has nothing to select in Resolve's cache manager,
+  since there's no project entry left to attach it to. This tool still
+  finds it via the `Info.txt` Resolve wrote next to the cache files
+  themselves (see below), and flags it as "possibly deleted."
+- Resolve's own cache manager deletes immediately, with **no warning
+  dialog or undo**. The native app version of this tool (below) moves
+  cache to Trash instead — recoverable if you pick the wrong thing.
+- This tool also works without opening Resolve at all — useful for a
+  quick "how much space is this actually using" check.
 
-## Wie Cache zu Projekten zugeordnet wird
+## How it maps cache back to projects
 
-Keine SQL-Tabelle nötig. Jeder UUID-Ordner direkt unter einem
-`CacheClip`-Verzeichnis enthält eine simple Textdatei `Info.txt`:
+No SQL table needed. Every UUID folder directly under a `CacheClip`
+directory contains a plain-text `Info.txt` file:
 
 ```
 Database Name: X9Pro
@@ -52,35 +48,32 @@ User Name: guest
 Project Name: My Project Name
 ```
 
-Das war's schon — Resolve schreibt seine eigene UUID-zu-Projekt-Zuordnung
-direkt neben die Cache-Dateien. Kein SQLite-Parsing, keine
-BLOB-Spalten-Kopfschmerzen. Dieses Tool liest einfach diese Dateien.
+That's it — Resolve writes its own UUID→project mapping right next to the
+cache files. No SQLite parsing, no BLOB-column headaches. This tool just
+reads those files.
 
-## Was das Skript macht
+## What the script does
 
-1. Durchsucht dein Home-Verzeichnis und jedes eingebundene Laufwerk nach
-   Resolve-Disk-Datenbanken (`Resolve Projects`) und Render-Cache-Ordnern
-   (`CacheClip`) — automatisch, ohne fest codierte Pfade oder
-   Laufwerksnamen.
-2. Liest aus jedem UUID-Ordner die `Info.txt`, um Projekt- und
-   Datenbankname zu ermitteln.
-3. Misst den tatsächlichen Speicherverbrauch pro Projekt-Cache.
-4. Stellt fest, ob der Cache auf einem internen oder externen Laufwerk
-   liegt (über `diskutil`, nicht per Pfad-Raterei).
-5. Gibt eine sortierte Tabelle aus: Projekt → Laufwerk → Größe → Pfad,
-   größte zuerst.
-6. Zusätzlich: der *konfigurierte* Cache-Pfad jedes Projekts (aus
-   `SM_UserSetup.CachePath` in `Project.db`) — so erkennst du Projekte,
-   die auf ein nicht mehr angeschlossenes Laufwerk zeigen.
+1. Scans your home folder and every mounted volume for Resolve disk
+   databases (`Resolve Projects`) and render-cache folders (`CacheClip`) —
+   automatically, without any hardcoded paths or drive names.
+2. Reads each UUID folder's `Info.txt` to resolve it to a project name and
+   database name.
+3. Measures the actual disk usage of each project's cache.
+4. Determines whether that cache lives on an internal or external drive
+   (via `diskutil`, not path guessing).
+5. Prints one sorted table: project → drive → size → path — largest first.
+6. As a bonus, also lists each project's *configured* cache path (from
+   `SM_UserSetup.CachePath` in `Project.db`), so you can spot projects
+   pointing at a drive that's no longer connected.
 
-Verschachtelte/doppelte `CacheClip`-Ordner (ein häufiger Fehler bei
-manueller Einrichtung) werden automatisch erkannt und übersprungen: Ein
-`CacheClip`-Ordner zählt nur, wenn er direkt UUID-Ordner oder die
-gemeinsamen `audio`/`OptimizedMedia`-Ordner enthält — ein Ordner, der nur
-einen weiteren `CacheClip`-Ordner enthält, gilt als Wrapper und wird
-ignoriert.
+Nested/duplicate `CacheClip` folders (a common manual-setup mistake) are
+detected and skipped automatically: a `CacheClip` folder only counts if it
+directly contains UUID folders or the shared `audio`/`OptimizedMedia`
+folders — a folder that only contains another folder called `CacheClip` is
+treated as a wrapper and ignored.
 
-## Beispielausgabe
+## Example output
 
 ```
 Part 1 — Cache usage per project, sorted by size
@@ -97,77 +90,76 @@ Part 1 — Cache usage per project, sorted by size
   Total external: 56.0 GB
 ```
 
-## Voraussetzungen
+## Requirements
 
-- macOS (nutzt `diskutil`, `sqlite3` — beides vorinstalliert, keine
-  Installation nötig)
-- DaVinci Resolve mit einer **Disk-Database**-Projektbibliothek. Bei
-  Resolves Standard-Cloud/Postgres-Bibliothek gibt es keinen
-  `Resolve Projects`-Ordner zu finden, und Teil 2 bleibt leer — Teil 1
-  (der CacheClip-Scan) funktioniert trotzdem, da die
-  Cache-Ordnerstruktur gleich ist.
+- macOS (uses `diskutil`, `sqlite3` — both built in, no install needed)
+- DaVinci Resolve using a **Disk Database** project library. If you use
+  Resolve's default cloud/Postgres project library instead, there's no
+  `Resolve Projects` folder for this tool to find, and Part 2 will simply
+  report nothing — Part 1 (the CacheClip scan) still works either way,
+  since the cache folder structure is the same.
 
-## Native App
+## Native app
 
-`CacheAudit/` enthält eine native macOS-App (SwiftUI), die denselben Scan
-in einem Fenster statt im Terminal macht, plus eine Fähigkeit, die das
-Skript nicht hat: Cache-Einträge auswählen und in den Papierkorb
-verschieben (nie unwiderruflich löschen) — direkt im Dashboard. Sie zeigt
-außerdem dieselbe Tabelle konfigurierter Cache-Pfade wie Teil 2, gruppiert
-nach Disk-Datenbank, falls mehrere vorhanden sind.
+![Cache Audit dashboard, showing a sample scan grouped by disk database](CacheAudit/screenshot.png)
 
-**Download:** `Cache Audit.app` von der [Releases](../../releases)-Seite
-laden, DMG öffnen, in den Programme-Ordner ziehen.
+`CacheAudit/` contains a native macOS app (SwiftUI) that does the same scan
+in a window instead of a terminal, and adds one capability the script
+doesn't have: selecting cache entries and moving them to Trash (never a
+hard delete) directly from the dashboard. It also shows the same
+configured-cache-path table as Part 2 below, grouped by disk database when
+you have more than one.
 
-**Selbst bauen:** `CacheAudit/CacheAudit.xcodeproj` in Xcode öffnen und
-starten, oder vorher `xcodegen generate` in `CacheAudit/` ausführen, falls
-die `.xcodeproj` fehlt (`brew install xcodegen`).
+**Download:** grab `Cache Audit.app` from the
+[Releases](../../releases) page, open the DMG, and drag it into
+Applications.
 
-### Erster Start (unsignierter Build)
+**Build from source:** open `CacheAudit/CacheAudit.xcodeproj` in Xcode and
+run, or `xcodegen generate` from `CacheAudit/` first if the `.xcodeproj` is
+missing (`brew install xcodegen`).
 
-Dieser Build ist nicht von Apple notarisiert (dafür bräuchte es eine
-kostenpflichtige Apple-Developer-Mitgliedschaft) — er ist ad-hoc signiert,
-üblich für kleine, kostenlose Tools außerhalb des App Store. Gatekeeper
-verweigert beim ersten Doppelklick das Öffnen. Einmalig nötig:
+### First launch (unsigned build)
 
-1. Rechtsklick (oder Control-Klick) auf `Cache Audit.app` im
-   Programme-Ordner → **Öffnen**.
-2. Im Dialog nochmal **Öffnen** klicken.
+This build isn't notarized by Apple (that requires a paid Apple Developer
+Program membership) — it's ad-hoc signed, which is normal for a small free
+tool distributed outside the App Store. macOS Gatekeeper will refuse to
+open it with a plain double-click the first time. To open it once:
 
-Danach lässt sich die App normal öffnen, wie jede andere App auch. Das ist
-ein einmaliger Schritt pro Mac — Gatekeeper wird dabei nicht deaktiviert,
-nur diese eine App freigegeben.
+1. Right-click (or Control-click) `Cache Audit.app` in Applications → **Open**.
+2. Click **Open** again in the dialog that appears.
 
-## Verwendung (Skript)
+After that first approval, it opens normally like any other app. This is a
+one-time step per Mac — you're not disabling Gatekeeper, just approving this
+one app.
 
-Doppelklick auf `DaVinci Cache Audit.command`. Es öffnet ein
-Terminal-Fenster, scannt deine Laufwerke und gibt den Bericht aus.
-Beliebige Taste drücken, um das Fenster danach zu schließen.
+## Usage
 
-Alternativ direkt im Terminal:
+Double-click `DaVinci Cache Audit.command`. It opens Terminal, scans your
+drives, and prints the report. Press any key to close the window when
+you're done reading.
+
+You can also run it from a terminal directly:
 
 ```sh
 ./"DaVinci Cache Audit.command"
 ```
 
-**Der erste Durchlauf auf einem großen oder eingeschlafenen externen
-Laufwerk kann dauern** — die Größenberechnung muss den Cache-Ordner
-tatsächlich durchlaufen, und macOS startet danach oft eine
-Spotlight-Indizierung, nachdem tausende kleiner Cache-Dateien auf einem
-externen Laufwerk angefasst wurden. Das Tool gibt währenddessen
-Fortschrittszeilen aus, damit ein langsamer Durchlauf nicht wie ein
-Hänger aussieht.
+**First run on a large or sleeping external drive can take a while** — the
+size calculation has to actually walk the cache folder, and macOS often
+kicks off Spotlight indexing right after touching thousands of small cache
+files on an external drive. The tool prints progress lines while it works
+so a slow run doesn't look frozen.
 
-## Sicherheit
+## Safety
 
-Das Skript ist **rein lesend**. Es löscht oder verändert nichts — es führt
-nur `find`, `du` und lesende `SELECT`-Abfragen aus. Sicher, jederzeit
-auszuführen, auch während Resolve läuft.
+This tool is **read-only**. It never deletes or modifies anything — it only
+runs `find`, `du`, and read-only `SELECT` queries. It's safe to run at any
+time, including while Resolve is open.
 
-Um Render-Cache tatsächlich zu leeren: nicht von Hand löschen — entweder
-vorher Resolve schließen, oder besser Resolves eigenes Tool nutzen:
+To actually clear render cache, don't delete these folders by hand — close
+Resolve first if you do, or better yet use Resolve's own tool:
 **Playback → Delete Render Cache → All**.
 
-## Lizenz
+## License
 
-MIT — siehe [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
