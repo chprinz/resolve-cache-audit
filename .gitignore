@@ -1,2 +1,17 @@
 .DS_Store
 *.log
+
+# Resolve logo/branding reference images — not ours to redistribute
+logo assets/
+resolve logo.png
+
+# Build artifacts — attach to GitHub Releases instead of committing
+*.dmg
+
+# Xcode / Swift
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+CacheAudit/CacheAudit.xcodeproj/project.xcworkspace/
+CacheAudit/CacheAudit.xcodeproj/xcuserdata/
